@@ -27,6 +27,7 @@ class Model(nn.Module):
         
         self.model = args.model
         self.scale = np.sqrt(self.hidR)
+        self.attn = args.attn_score
 
         if (self.model == 'skip'):
             self.GRUskip = nn.GRU(input_size=self.hidC, hidden_size=self.hidS)
@@ -34,7 +35,11 @@ class Model(nn.Module):
             # RNN output + skip-RNN output
             self.linear1 = nn.Linear(in_features=self.hidR + self.skip * self.hidS, out_features=self.m)
         elif(self.model == 'attn'):
-            self.linear1 = nn.Linear(in_features=self.hidR*2, out_features=self.m)
+            if (self.attn == 'scaled_dot'):
+                self.linear1 = nn.Linear(in_features=self.hidR*2, out_features=self.m)
+            if (self.attn == 'multihead'):
+                self.multihead = nn.MultiheadAttention()
+                self.linear1 = nn.Linear(in_features=self.hidR*2, out_features=self.m)
         else:
             self.linear1 = nn.Linear(in_features=self.hidR, out_features=self.m)
         
@@ -89,21 +94,27 @@ class Model(nn.Module):
 
         # attn-RNN
         elif (self.model == 'attn'):
-            
             # r_stack: [batch, H, hidR]
             # r: [batch, hicR]
             H_t = H_t.permute(1,0,2)
 
-            # alpha_t = attn_score(H_t, h_t-1)
-            # scaled dot product as attention score
-            a_w = torch.bmm(H_t, r.unsqueeze(2)) / self.scale
-            a_w = torch.softmax(a_w, 1)
-            
-            # c_t = H_t * alpha_t
-            a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)
+            if (self.attn == 'scaled_dot'):
+                # alpha_t = attn_score(H_t, h_t-1)
+                # scaled dot product as attention score
+                a_w = torch.bmm(H_t, r.unsqueeze(2)) / self.scale
+                a_w = torch.softmax(a_w, 1)
+                # c_t = H_t * alpha_t
+                a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)
+                # [c_t;h_t-1]
+                r = torch.cat((a,r),1)
+            if (self.attn == 'cosine'):
+                a_w = torch.cosine_similarity()
 
-            # [c_t;h_t-1]
-            r = torch.cat((a,r),1)
+            if (self.attn == 'multihead'):
+                a, a_w = self.multihead(H_t, H_t, H_t)
+
+
+
 
 
         # combine RNN and skip-RNN/attn-RNN

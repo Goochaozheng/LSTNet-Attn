@@ -72,6 +72,8 @@ parser.add_argument('--data', type=str, required=True,
                     help='data file')
 parser.add_argument('--model', type=str, default='skip',
                     help='Optional: skip, attn')
+parser.add_argument('--attn_score', type=str, default='scaled_dot',
+                    help="Optional: scaled_dot, cosine, multihead")
 parser.add_argument('--hidCNN', type=int, default=100,
                     help='number of CNN hidden units')
 parser.add_argument('--hidRNN', type=int, default=100,
@@ -84,7 +86,7 @@ parser.add_argument('--highway_window', type=int, default=24,
                     help='The window size of the highway component')
 parser.add_argument('--clip', type=float, default=10.,
                     help='gradient clipping')
-parser.add_argument('--epochs', type=int, default=300,
+parser.add_argument('--epochs', type=int, default=200,
                     help='upper epoch limit')
 parser.add_argument('--batch_size', type=int, default=256, metavar='N',
                     help='batch size')
