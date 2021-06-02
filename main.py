@@ -136,7 +136,10 @@ else:
     print("* model RNN")
 
 print("* data={}; horizon={}; ".format(args.data, args.horizon))
-writer = SummaryWriter(comment='_{model}_{data}_horizon_{horizon}'.format(model=args.model, data=args.data, horizon=args.horizon))
+if(args.model == 'attn'):
+    writer = SummaryWriter(comment='_{model}_{attn}_{data}_horizon_{horizon}'.format(model=args.model, attn=args.attn_score, data=args.data, horizon=args.horizon))
+else:
+    writer = SummaryWriter(comment='_{model}_{data}_horizon_{horizon}'.format(model=args.model, data=args.data, horizon=args.horizon))
 save_path = 'save/{model}/{data}.pt'.format(model=args.model, data=args.data)
 
 ##########################

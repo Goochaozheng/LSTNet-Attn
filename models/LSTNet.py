@@ -106,15 +106,16 @@ class Model(nn.Module):
                 # c_t = H_t * alpha_t
                 a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)
                 # [c_t;h_t-1]
-                r = torch.cat((a,r),1)
             if (self.attn == 'cosine'):
-                a_w = torch.cosine_similarity()
-
+                r_temp = r.unsqueeze(1).repeat(1, self.hidR, 1)
+                # cosine similarity as attention score
+                a_w = torch.cosine_similarity(H_t, r_temp, 2).unsqueeze(2)
+                a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)       
             if (self.attn == 'multihead'):
-                a, a_w = self.multihead(H_t, H_t, H_t)
-
-
-
+                a, _ = self.multihead(H_t, H_t, H_t)
+                a = a.permute(1,0,2)[:, -1, :]
+                
+            r = torch.cat((a,r),1)
 
 
         # combine RNN and skip-RNN/attn-RNN
