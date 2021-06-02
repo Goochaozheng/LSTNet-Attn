@@ -1,4 +1,5 @@
 import torch
+from os.path import join
 import numpy as np;
 from torch.autograd import Variable
 
@@ -10,12 +11,12 @@ class Data_utility(object):
     # train and valid is the ratio of training set and validation set. test = 1 - train - valid
     def __init__(self, file_name, train, valid, cuda, horizon, window, normalize = 2):
         self.cuda = cuda;
-        self.P = window;
+        self.P = window;                        # tau
         self.h = horizon
-        fin = open(file_name);
+        fin = open(join('data', file_name+'.txt'));
         self.rawdat = np.loadtxt(fin,delimiter=',');
         self.dat = np.zeros(self.rawdat.shape);
-        self.n, self.m = self.dat.shape;
+        self.n, self.m = self.dat.shape;        # n:sequence length; m:number of variables
         self.normalize = 2
         self.scale = np.ones(self.m);
         self._normalized(normalize);
@@ -40,13 +41,13 @@ class Data_utility(object):
         if (normalize == 1):
             self.dat = self.rawdat / np.max(self.rawdat);
             
-        #normlized by the maximum value of each row(sensor).
+        #normalized by the maximum value of each row(sensor).
         if (normalize == 2):
             for i in range(self.m):
                 self.scale[i] = np.max(np.abs(self.rawdat[:,i]));
                 self.dat[:,i] = self.rawdat[:,i] / np.max(np.abs(self.rawdat[:,i]));
             
-        
+    
     def _split(self, train, valid, test):
         
         train_set = range(self.P+self.h-1, train);
@@ -60,8 +61,8 @@ class Data_utility(object):
     def _batchify(self, idx_set, horizon):
         
         n = len(idx_set);
-        X = torch.zeros((n,self.P,self.m));
-        Y = torch.zeros((n,self.m));
+        X = torch.zeros((n, self.P, self.m));
+        Y = torch.zeros((n, self.m));
         
         for i in range(n):
             end = idx_set[i] - self.h + 1;

@@ -1,12 +1,14 @@
 import argparse
 import math
 import time
+import datetime
 
 import torch
 import torch.nn as nn
 from models import LSTNet
 import numpy as np;
 import importlib
+from torch.utils.tensorboard import SummaryWriter
 
 from utils import *;
 import Optim
@@ -29,10 +31,12 @@ def evaluate(data, X, Y, model, evaluateL2, evaluateL1, batch_size):
             test = torch.cat((test, Y));
         
         scale = data.scale.expand(output.size(0), data.m)
-        total_loss += evaluateL2(output * scale, Y * scale).data[0]
-        total_loss_l1 += evaluateL1(output * scale, Y * scale).data[0]
+        total_loss += evaluateL2(output * scale, Y * scale).item()
+        total_loss_l1 += evaluateL1(output * scale, Y * scale).item()
         n_samples += (output.size(0) * data.m);
-    rse = math.sqrt(total_loss / n_samples)/data.rse
+    
+    rmse = math.sqrt(total_loss / n_samples)
+    rse = rmse/data.rse
     rae = (total_loss_l1/n_samples)/data.rae
     
     predict = predict.data.cpu().numpy();
@@ -44,7 +48,9 @@ def evaluate(data, X, Y, model, evaluateL2, evaluateL1, batch_size):
     index = (sigma_g!=0);
     correlation = ((predict - mean_p) * (Ytest - mean_g)).mean(axis = 0)/(sigma_p * sigma_g);
     correlation = (correlation[index]).mean();
-    return rse, rae, correlation;
+    
+    return rmse, rse, rae, correlation;
+    
 
 def train(data, X, Y, model, criterion, optim, batch_size):
     model.train();
@@ -57,15 +63,15 @@ def train(data, X, Y, model, criterion, optim, batch_size):
         loss = criterion(output * scale, Y * scale);
         loss.backward();
         grad_norm = optim.step();
-        total_loss += loss.data[0];
+        total_loss += loss.item();
         n_samples += (output.size(0) * data.m);
     return total_loss / n_samples
     
 parser = argparse.ArgumentParser(description='PyTorch Time series forecasting')
 parser.add_argument('--data', type=str, required=True,
-                    help='location of the data file')
-parser.add_argument('--model', type=str, default='LSTNet',
-                    help='')
+                    help='data file')
+parser.add_argument('--model', type=str, default='skip',
+                    help='Optional: skip, attn')
 parser.add_argument('--hidCNN', type=int, default=100,
                     help='number of CNN hidden units')
 parser.add_argument('--hidRNN', type=int, default=100,
@@ -78,9 +84,9 @@ parser.add_argument('--highway_window', type=int, default=24,
                     help='The window size of the highway component')
 parser.add_argument('--clip', type=float, default=10.,
                     help='gradient clipping')
-parser.add_argument('--epochs', type=int, default=100,
+parser.add_argument('--epochs', type=int, default=300,
                     help='upper epoch limit')
-parser.add_argument('--batch_size', type=int, default=128, metavar='N',
+parser.add_argument('--batch_size', type=int, default=256, metavar='N',
                     help='batch size')
 parser.add_argument('--dropout', type=float, default=0.2,
                     help='dropout applied to layers (0 = no dropout)')
@@ -95,28 +101,53 @@ parser.add_argument('--cuda', type=str, default=True)
 parser.add_argument('--optim', type=str, default='adam')
 parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--horizon', type=int, default=12)
-parser.add_argument('--skip', type=float, default=24)
+parser.add_argument('--skip', type=int, default=24)
 parser.add_argument('--hidSkip', type=int, default=5)
 parser.add_argument('--L1Loss', type=bool, default=True)
 parser.add_argument('--normalize', type=int, default=2)
 parser.add_argument('--output_fun', type=str, default='sigmoid')
-args = parser.parse_args()
+parser.add_argument('--comment', type=str)
 
+
+##########################
+# Read Param
+##########################
+args = parser.parse_args()
 args.cuda = args.gpu is not None
 if args.cuda:
     torch.cuda.set_device(args.gpu)
+
 # Set the random seed manually for reproducibility.
 torch.manual_seed(args.seed)
+
 if torch.cuda.is_available():
     if not args.cuda:
         print("WARNING: You have a CUDA device, so you should probably run with --cuda")
     else:
         torch.cuda.manual_seed(args.seed)
 
-Data = Data_utility(args.data, 0.6, 0.2, args.cuda, args.horizon, args.window, args.normalize);
-print(Data.rse);
+if(args.model == 'skip'):
+    print("* model=skip, skip={}".format(args.skip))
+elif(args.model == 'attn'):
+    print("* model=attn")
+else:
+    print("* model RNN")
 
-model = eval(args.model).Model(args, Data);
+print("* data={}; horizon={}; ".format(args.data, args.horizon))
+writer = SummaryWriter(comment='_{model}_{data}_horizon_{horizon}'.format(model=args.model, data=args.data, horizon=args.horizon))
+save_path = 'save/{model}/{data}.pt'.format(model=args.model, data=args.data)
+
+##########################
+# Load data
+##########################
+Data = Data_utility(args.data, 0.6, 0.2, args.cuda, args.horizon, args.window, args.normalize);
+dummy_input = torch.rand(args.batch_size, args.window, Data.m)
+
+##########################
+# Create Model
+##########################
+model = eval('LSTNet').Model(args, Data);
+writer.add_graph(model, (dummy_input,))
 
 if args.cuda:
     model.cuda()
@@ -125,11 +156,11 @@ nParams = sum([p.nelement() for p in model.parameters()])
 print('* number of parameters: %d' % nParams)
 
 if args.L1Loss:
-    criterion = nn.L1Loss(size_average=False);
+    criterion = nn.L1Loss(reduction='sum');
 else:
-    criterion = nn.MSELoss(size_average=False);
-evaluateL2 = nn.MSELoss(size_average=False);
-evaluateL1 = nn.L1Loss(size_average=False)
+    criterion = nn.MSELoss(reduction='sum');
+evaluateL2 = nn.MSELoss(reduction='sum');
+evaluateL1 = nn.L1Loss(reduction='sum')
 if args.cuda:
     criterion = criterion.cuda()
     evaluateL1 = evaluateL1.cuda();
@@ -141,30 +172,45 @@ optim = Optim.Optim(
     model.parameters(), args.optim, args.lr, args.clip,
 )
 
+##########################
+# Begin Training
 # At any point you can hit Ctrl + C to break out of training early.
+##########################
 try:
-    print('begin training');
+    print('* begin training');
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         train_loss = train(Data, Data.train[0], Data.train[1], model, criterion, optim, args.batch_size)
-        val_loss, val_rae, val_corr = evaluate(Data, Data.valid[0], Data.valid[1], model, evaluateL2, evaluateL1, args.batch_size);
-        print('| end of epoch {:3d} | time: {:5.2f}s | train_loss {:5.4f} | valid rse {:5.4f} | valid rae {:5.4f} | valid corr  {:5.4f}'.format(epoch, (time.time() - epoch_start_time), train_loss, val_loss, val_rae, val_corr))
+        val_rmse, val_loss, val_rae, val_corr = evaluate(Data, Data.valid[0], Data.valid[1], model, evaluateL2, evaluateL1, args.batch_size);
+        print('| end of epoch {:3d} | time: {:5.2f}s | train_loss {:5.4f} | valid rmse {:5.4f} | valid rse {:5.4f} | valid rae {:5.4f} | valid corr  {:5.4f}' \
+            .format(epoch, (time.time() - epoch_start_time), train_loss, val_rmse, val_loss, val_rae, val_corr))
+        writer.add_scalar('train/loss', train_loss, epoch)
+        writer.add_scalar('val/loss', val_loss, epoch)
+        writer.add_scalar('val/rmse', val_rmse, epoch)
+        writer.add_scalar('val/rae', val_rae, epoch)
+        writer.add_scalar('val/corr', val_corr, epoch)
         # Save the model if the validation loss is the best we've seen so far.
 
         if val_loss < best_val:
-            with open(args.save, 'wb') as f:
+            with open(save_path, 'wb') as f:
                 torch.save(model, f)
             best_val = val_loss
         if epoch % 5 == 0:
-            test_acc, test_rae, test_corr  = evaluate(Data, Data.test[0], Data.test[1], model, evaluateL2, evaluateL1, args.batch_size);
-            print ("test rse {:5.4f} | test rae {:5.4f} | test corr {:5.4f}".format(test_acc, test_rae, test_corr))
+            test_rmse, test_acc, test_rae, test_corr  = evaluate(Data, Data.test[0], Data.test[1], model, evaluateL2, evaluateL1, args.batch_size);
+            print ("test rmse {:5.4f} | test rse {:5.4f} | test rae {:5.4f} | test corr {:5.4f}".format(test_rmse, test_acc, test_rae, test_corr))
 
 except KeyboardInterrupt:
     print('-' * 89)
     print('Exiting from training early')
 
 # Load the best saved model.
-with open(args.save, 'rb') as f:
+with open(save_path, 'rb') as f:
     model = torch.load(f)
-test_acc, test_rae, test_corr  = evaluate(Data, Data.test[0], Data.test[1], model, evaluateL2, evaluateL1, args.batch_size);
-print ("test rse {:5.4f} | test rae {:5.4f} | test corr {:5.4f}".format(test_acc, test_rae, test_corr))
+test_rmse, test_acc, test_rae, test_corr  = evaluate(Data, Data.test[0], Data.test[1], model, evaluateL2, evaluateL1, args.batch_size);
+print ("Best Model")
+print ("test rmse {:5.4f} | test rse {:5.4f} | test rae {:5.4f} | test corr {:5.4f}".format(test_rmse, test_acc, test_rae, test_corr))
+
+writer.add_hparams(
+    {'data': args.data, 'horizon': args.horizon, 'window':args.window, 'model':args.model, 'skip': args.skip},
+    {'metric/rmse': test_rmse, 'metric/rse': test_acc, 'metric/rae': test_rae, 'metric/corr': test_corr}
+)
