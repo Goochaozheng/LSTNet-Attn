@@ -106,7 +106,8 @@ class Model(nn.Module):
             #     r_temp = r.unsqueeze(1).repeat(1, H_t.shape[1], 1)
             #     # cosine similarity as attention score
             #     a_w = torch.cosine_similarity(H_t, r_temp, 2).unsqueeze(2)
-            #     a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)       
+            #     a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)   
+                
             if (self.attn == 'multihead'):
                 a, _ = self.multihead(H_t, H_t, H_t)
                 a = a.permute(1,0,2)[:, -1, :]
