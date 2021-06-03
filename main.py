@@ -109,7 +109,7 @@ parser.add_argument('--L1Loss', type=bool, default=True)
 parser.add_argument('--normalize', type=int, default=2)
 parser.add_argument('--output_fun', type=str, default='sigmoid')
 parser.add_argument('--comment', type=str)
-
+parser.add_argument('--verbose')
 
 ##########################
 # Read Param
@@ -135,7 +135,7 @@ elif(args.model == 'attn'):
 else:
     print("* model RNN")
 
-print("* data={}; horizon={}; ".format(args.data, args.horizon))
+print("* data={}; horizon={}; batch={}".format(args.data, args.horizon, args.batch_size))
 if(args.model == 'attn'):
     writer = SummaryWriter(comment='_{model}_{attn}_{data}_horizon_{horizon}'.format(model=args.model, attn=args.attn_score, data=args.data, horizon=args.horizon))
 else:
@@ -187,8 +187,9 @@ try:
         epoch_start_time = time.time()
         train_loss = train(Data, Data.train[0], Data.train[1], model, criterion, optim, args.batch_size)
         val_rmse, val_loss, val_rae, val_corr = evaluate(Data, Data.valid[0], Data.valid[1], model, evaluateL2, evaluateL1, args.batch_size);
-        print('| end of epoch {:3d} | time: {:5.2f}s | train_loss {:5.4f} | valid rmse {:5.4f} | valid rse {:5.4f} | valid rae {:5.4f} | valid corr  {:5.4f}' \
-            .format(epoch, (time.time() - epoch_start_time), train_loss, val_rmse, val_loss, val_rae, val_corr))
+        if (args.verbose):
+            print('| end of epoch {:3d} | time: {:5.2f}s | train_loss {:5.4f} | valid rmse {:5.4f} | valid rse {:5.4f} | valid rae {:5.4f} | valid corr  {:5.4f}' \
+                .format(epoch, (time.time() - epoch_start_time), train_loss, val_rmse, val_loss, val_rae, val_corr))
         writer.add_scalar('train/loss', train_loss, epoch)
         writer.add_scalar('val/loss', val_loss, epoch)
         writer.add_scalar('val/rmse', val_rmse, epoch)
@@ -200,7 +201,7 @@ try:
             with open(save_path, 'wb') as f:
                 torch.save(model, f)
             best_val = val_loss
-        if epoch % 5 == 0:
+        if epoch % 5 == 0 and args.verbose:
             test_rmse, test_acc, test_rae, test_corr  = evaluate(Data, Data.test[0], Data.test[1], model, evaluateL2, evaluateL1, args.batch_size);
             print ("test rmse {:5.4f} | test rse {:5.4f} | test rae {:5.4f} | test corr {:5.4f}".format(test_rmse, test_acc, test_rae, test_corr))
 
