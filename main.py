@@ -34,7 +34,7 @@ def evaluate(data, X, Y, model, evaluateL2, evaluateL1, batch_size):
         total_loss += evaluateL2(output * scale, Y * scale).item()
         total_loss_l1 += evaluateL1(output * scale, Y * scale).item()
         n_samples += (output.size(0) * data.m);
-    
+
     rmse = math.sqrt(total_loss / n_samples)
     rse = rmse/data.rse
     rae = (total_loss_l1/n_samples)/data.rae
@@ -88,7 +88,7 @@ parser.add_argument('--clip', type=float, default=10.,
                     help='gradient clipping')
 parser.add_argument('--epochs', type=int, default=200,
                     help='upper epoch limit')
-parser.add_argument('--batch_size', type=int, default=256, metavar='N',
+parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='batch size')
 parser.add_argument('--dropout', type=float, default=0.2,
                     help='dropout applied to layers (0 = no dropout)')
@@ -131,7 +131,7 @@ if torch.cuda.is_available():
 if(args.model == 'skip'):
     print("* model=skip, skip={}".format(args.skip))
 elif(args.model == 'attn'):
-    print("* model=attn")
+    print("* model=attn, attn_score={}".format(args.attn_score))
 else:
     print("* model RNN")
 
@@ -216,6 +216,6 @@ print ("Best Model")
 print ("test rmse {:5.4f} | test rse {:5.4f} | test rae {:5.4f} | test corr {:5.4f}".format(test_rmse, test_acc, test_rae, test_corr))
 
 writer.add_hparams(
-    {'data': args.data, 'horizon': args.horizon, 'window':args.window, 'model':args.model, 'skip': args.skip},
+    {'data': args.data, 'horizon': args.horizon, 'window':args.window, 'model':args.model, 'skip': args.skip, 'attn':args.attn_score},
     {'metric/rmse': test_rmse, 'metric/rse': test_acc, 'metric/rae': test_rae, 'metric/corr': test_corr}
 )
