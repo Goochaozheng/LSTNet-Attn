@@ -101,6 +101,7 @@ class Model(nn.Module):
                 # c_t = H_t * alpha_t
                 a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)
                 # [c_t;h_t-1]
+                r = torch.cat((a,r),1)
 
             # if (self.attn == 'cosine'):
             #     r_temp = r.unsqueeze(1).repeat(1, H_t.shape[1], 1)
@@ -111,8 +112,7 @@ class Model(nn.Module):
             if (self.attn == 'multihead'):
                 a, _ = self.multihead(H_t, H_t, H_t)
                 a = a.permute(1,0,2)[:, -1, :]
-
-            r = torch.cat((a,r),1)
+                r = torch.cat((a,r),1)
 
 
         # combine RNN and skip-RNN/attn-RNN
