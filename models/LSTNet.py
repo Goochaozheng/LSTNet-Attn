@@ -35,7 +35,9 @@ class Model(nn.Module):
             # RNN output + skip-RNN output
             self.linear1 = nn.Linear(in_features=self.hidR + self.skip * self.hidS, out_features=self.m)
         elif(self.model == 'attn'):
-            self.multihead = nn.MultiheadAttention(embed_dim=self.hidR, num_heads=5)
+            self.multihead = None
+            if(self.attn == 'multihead'):
+                self.multihead = nn.MultiheadAttention(embed_dim=self.hidR, num_heads=5)
             self.linear1 = nn.Linear(in_features=self.hidR*2, out_features=self.m)
         else:
             self.linear1 = nn.Linear(in_features=self.hidR, out_features=self.m)
@@ -103,11 +105,14 @@ class Model(nn.Module):
                 # [c_t;h_t-1]
                 r = torch.cat((a,r),1)
 
-            # if (self.attn == 'cosine'):
-            #     r_temp = r.unsqueeze(1).repeat(1, H_t.shape[1], 1)
-            #     # cosine similarity as attention score
-            #     a_w = torch.cosine_similarity(H_t, r_temp, 2).unsqueeze(2)
-            #     a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)   
+            if (self.attn == 'cosine'):
+                H_t = H_t.permute(1,0,2)
+                r_temp = r.unsqueeze(1).repeat(1, H_t.shape[1], 1)
+                # cosine similarity as attention score
+                a_w = torch.cosine_similarity(H_t, r_temp, 2).unsqueeze(2)
+                a_w = torch.softmax(a_w, 1)
+                a = torch.bmm(H_t.permute(0,2,1), a_w).squeeze(2)
+                r = torch.cat((a,r),1)   
                 
             if (self.attn == 'multihead'):
                 a, _ = self.multihead(H_t, H_t, H_t)
